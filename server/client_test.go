@@ -83,7 +83,7 @@ func createClientAsync(ch chan *client, s *Server, cli net.Conn) {
 		s.grWG.Add(1)
 	}
 	go func() {
-		c := s.createClient(cli, nil)
+		c := s.createClient(cli, nil, nil)
 		// Must be here to suppress +OK
 		c.opts.Verbose = false
 		if startWriteLoop {
@@ -2353,7 +2353,7 @@ func TestCloseConnectionVeryEarly(t *testing.T) {
 	// Call again with this closed connection. Alternatively, we
 	// would have to call with a fake connection that implements
 	// net.Conn but returns an error on Write.
-	s.createClient(c, nil)
+	s.createClient(c, nil, nil)
 
 	// This connection should not have been added to the server.
 	checkClientsCount(t, s, 0)
