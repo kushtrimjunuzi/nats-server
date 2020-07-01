@@ -407,6 +407,7 @@ type subscription struct {
 	max     int64
 	qw      int32
 	closed  int32
+	qos     byte // quality of service (for mqtt)
 }
 
 // Indicate that this subscription is closed.
@@ -2171,7 +2172,7 @@ func (c *client) processSub(argo []byte, noForward bool) (*subscription, error) 
 	var err error
 
 	// Subscribe here.
-	if c.subs[sid] == nil {
+	if es := c.subs[sid]; es == nil {
 		c.subs[sid] = sub
 		if acc != nil && acc.sl != nil {
 			err = acc.sl.Insert(sub)
@@ -2181,6 +2182,8 @@ func (c *client) processSub(argo []byte, noForward bool) (*subscription, error) 
 				updateGWs = c.srv.gateway.enabled
 			}
 		}
+	} else if c.mqtt != nil {
+		sub = es
 	}
 	// Unlocked from here onward
 	c.mu.Unlock()
