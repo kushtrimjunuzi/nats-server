@@ -927,6 +927,7 @@ func TestMQTTTopicConversion(t *testing.T) {
 		{"slash last is dot slash", "foo/", "foo./"},
 		{"slash last is dot slash with several sep", "foo/bar/", "foo.bar./"},
 		{"slash is first and last", "/foo/bar/baz/", "/.foo.bar.baz./"},
+		{"topic has dot and slash last", "foo./", "foo/./"},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			w := &mqttWriter{}
@@ -1218,6 +1219,44 @@ func TestMQTTSub(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestMQTTSubPropagation(t *testing.T) {
+	o := testMQTTDefaultOptions()
+	o.Cluster.Host = "127.0.0.1"
+	o.Cluster.Port = -1
+	s := RunServer(o)
+	defer s.Shutdown()
+
+	o2 := DefaultOptions()
+	o2.Routes = RoutesFromStr(fmt.Sprintf("nats://127.0.0.1:%d", o.Cluster.Port))
+	s2 := RunServer(o2)
+	defer s2.Shutdown()
+
+	checkClusterFormed(t, s, s2)
+
+	nc := natsConnect(t, s2.ClientURL())
+	defer nc.Close()
+
+	mc, r := testMQTTConnect(t, &mqttConnInfo{cleanSess: true}, o.MQTT.Host, o.MQTT.Port)
+	defer mc.Close()
+	testMQTTCheckConnAck(t, r, mqttConnAckRCConnectionAccepted, false)
+
+	testMQTTSub(t, 1, mc, r, []*mqttFilter{&mqttFilter{filter: []byte("foo/#"), qos: 0}}, []byte{0})
+	testMQTTFlush(t, mc, nil, r)
+
+	// Because in MQTT foo/# means foo.> but also foo, check that this is propagated
+	checkSubInterest(t, s2, globalAccountName, "foo", time.Second)
+
+	// Publish on foo.bar, foo./ and foo and we should receive them
+	natsPub(t, nc, "foo.bar", []byte("hello"))
+	testMQTTCheckPubMsg(t, mc, r, "foo/bar", 0, []byte("hello"))
+
+	natsPub(t, nc, "foo./", []byte("from"))
+	testMQTTCheckPubMsg(t, mc, r, "foo/", 0, []byte("from"))
+
+	natsPub(t, nc, "foo", []byte("NATS"))
+	testMQTTCheckPubMsg(t, mc, r, "foo", 0, []byte("NATS"))
 }
 
 func testMQTTExpectDisconnect(t testing.TB, c net.Conn) {
