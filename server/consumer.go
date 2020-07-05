@@ -1409,7 +1409,7 @@ func (o *Consumer) checkPending() {
 	}
 
 	if len(o.pending) > 0 {
-		o.ptmr.Reset(o.ackWait(time.Duration(next)))
+		o.ptmr.Reset(o.ackWait(0))
 	} else {
 		o.ptmr.Stop()
 		o.ptmr = nil
